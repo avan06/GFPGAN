@@ -24,7 +24,7 @@ def main():
     parser.add_argument(
         '-v', '--version', type=str, default='1.3', help='GFPGAN model version. Option: 1 | 1.2 | 1.3. Default: 1.3')
     parser.add_argument(
-        '-s', '--upscale', type=int, default=2, help='The final upsampling scale of the image. Default: 2')
+        '-s', '--upscale', type=float, default=2, help='The final upsampling scale of the image. Default: 2')
 
     parser.add_argument(
         '--bg_upsampler', type=str, default='realesrgan', help='background upsampler. Default: realesrgan')
@@ -126,13 +126,17 @@ def main():
     imgsLen = len(img_list)
     for idx, img_path in enumerate(img_list):
         # read image
-        img_name = os.path.basename(img_path)
-        print(f'[{idx}/{imgsLen}] Processing {img_name} ...')
-        basename, ext = os.path.splitext(img_name)
-        input_img = cv2.imdecode(np.fromfile(img_path, np.uint8), cv2.IMREAD_COLOR) #input_img = cv2.imread(img_path, cv2.IMREAD_COLOR)
-        
-        if input_img is None:
-            print("  cv2.imread result None, continue")
+        try:
+            img_name = os.path.basename(img_path)
+            print(f'[{idx}/{imgsLen}] Processing {img_name} ...')
+            basename, ext = os.path.splitext(img_name)
+            input_img = cv2.imdecode(np.fromfile(img_path, np.uint8), cv2.IMREAD_COLOR) #input_img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+            
+            if input_img is None:
+                print("  cv2.imread result None, continue")
+                continue
+        except Exception as err:
+            print("  cv2.imread result Exception: " + str(err))
             continue
 
         # restore faces and background if necessary
