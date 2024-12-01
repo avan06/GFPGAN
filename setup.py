@@ -75,8 +75,17 @@ def get_version():
 def get_requirements(filename='requirements.txt'):
     here = os.path.dirname(os.path.realpath(__file__))
     with open(os.path.join(here, filename), 'r') as f:
-        requires = [line.replace('\n', '') for line in f.readlines()]
-    return requires
+        requires = []
+        for line in f.readlines():
+            line = line.strip()
+            if line.startswith('--extra-index-url'):
+                continue
+            elif line.startswith('git+'):
+                repo_name = line.split('/')[-1]
+                requires.append(repo_name + " @ " + line)
+            else:
+                requires.append(line)
+        return requires
 
 
 if __name__ == '__main__':
