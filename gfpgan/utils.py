@@ -31,8 +31,10 @@ class GFPGANer():
         bg_upsampler (nn.Module): The upsampler for the background. Default: None.
     """
 
-    def __init__(self, model_path, upscale=2, arch='clean', channel_multiplier=2, bg_upsampler=None, device=None):
+    def __init__(self, model_path, upscale=2, target_width=None, target_height=None,arch='clean', channel_multiplier=2, bg_upsampler=None, device=None):
         self.upscale = upscale
+        self.target_width = target_width
+        self.target_height = target_height
         self.bg_upsampler = bg_upsampler
         self.lock = threading.Lock()  # A thread lock for protecting shared resources
 
@@ -81,6 +83,8 @@ class GFPGANer():
         # initialize face helper
         self.face_helper = FaceRestoreHelper(
             upscale,
+            target_width,
+            target_height,
             face_size=512,
             crop_ratio=(1, 1),
             det_model='retinaface_resnet50',

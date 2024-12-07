@@ -25,6 +25,10 @@ def main():
         '-v', '--version', type=str, default='1.4', help='GFPGAN model version. Option: 1 | 1.2 | 1.3 | 1.4. Default: 1.4')
     parser.add_argument(
         '-s', '--upscale', type=float, default=2, help='The final upsampling scale of the image. Default: 2')
+    parser.add_argument(
+        '-tw', '--target_width', type=int, help='The target image width after upscaling. Only one of target_width or target_height can be provided, or neither can be provided.')
+    parser.add_argument(
+        '-th', '--target_height', type=int, help='The target image height after upscaling. Only one of target_width or target_height can be provided, or neither can be provided.')
 
     parser.add_argument(
         '--bg_upsampler', type=str, default='realesrgan', help='background upsampler. Default: realesrgan')
@@ -119,6 +123,8 @@ def main():
     restorer = GFPGANer(
         model_path=model_path,
         upscale=args.upscale,
+        target_width=args.target_width,
+        target_height=args.target_height,
         arch=arch,
         channel_multiplier=channel_multiplier,
         bg_upsampler=bg_upsampler)
