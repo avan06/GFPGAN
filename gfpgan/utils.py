@@ -3,6 +3,7 @@ import os
 import gc
 import torch
 import threading
+import numpy as np
 from basicsr.utils import img2tensor, tensor2img
 from basicsr.utils.download_util import load_file_from_url
 from facexlib.utils.face_restoration_helper import FaceRestoreHelper
@@ -31,7 +32,7 @@ class GFPGANer():
         bg_upsampler (nn.Module): The upsampler for the background. Default: None.
     """
 
-    def __init__(self, model_path, upscale=2, target_width=None, target_height=None,arch='clean', channel_multiplier=2, bg_upsampler=None, device=None):
+    def __init__(self, model_path, upscale=2, target_width=None, target_height=None, arch='clean', channel_multiplier=2, bg_upsampler=None, device=None):
         self.upscale = upscale
         self.target_width = target_width
         self.target_height = target_height
@@ -104,7 +105,24 @@ class GFPGANer():
         self.gfpgan = self.gfpgan.to(self.device)
 
     @torch.no_grad()
-    def enhance(self, img, has_aligned=False, only_center_face=False, paste_back=True, weight=0.5):
+    def enhance(self, img, has_aligned=False, only_center_face=False, paste_back=True, weight=0.5, bg_upsample_img: np.ndarray=None):
+        """
+        Enhance facial features in the input image using face alignment, restoration, and optional background upsampling.
+
+        Args:
+            img (np.ndarray): The input image to be processed.
+            has_aligned (bool, optional): Indicates whether the input image is already aligned to 512x512. If True, no alignment will be performed. Defaults to False.
+            only_center_face (bool, optional): If True, only the most prominent face in the center of the image will be processed. Defaults to False.
+            paste_back (bool, optional): If True, the restored faces will be pasted back onto the original image or a background upsampled image. Defaults to True.
+            weight (float, optional): The blending weight for the face restoration model. Defaults to 0.5.
+            bg_upsample_img (np.ndarray, optional): An already upsampled background image to paste the restored faces onto. If None, background upsampling will be performed if supported. Defaults to None.
+
+        Returns:
+            tuple: 
+                - cropped_faces (list): A list of cropped face images.
+                - restored_faces (list): A list of restored face images.
+                - restored_img (np.ndarray or None): The full restored image with enhanced faces pasted back, or None if `paste_back` is False.
+        """
         with self.lock:
             self.face_helper.clean_all()
 
@@ -140,8 +158,11 @@ class GFPGANer():
                     self.face_helper.add_restored_face(restored_face)
             
                 if not has_aligned and paste_back:
+                    # If a background upsampled image is provided, apply the face-enhanced image onto the provided image (bg upsample img must be an already upscaled image).
+                    if bg_upsample_img is not None:
+                        bg_img = bg_upsample_img
                     # upsample the background
-                    if self.bg_upsampler is not None:
+                    elif self.bg_upsampler is not None:
                         # Now only support RealESRGAN for upsampling background
                         bg_img = self.bg_upsampler.enhance(img, outscale=self.upscale)[0]
                     else:
@@ -158,7 +179,9 @@ class GFPGANer():
                 self._cleanup()
 
     def _cleanup(self):
-        # Free GPU memory and clean up resources
+        """
+        Free GPU memory and clean up resources
+        """
         torch.cuda.empty_cache()
         gc.collect()
         self.face_helper.clean_all()
