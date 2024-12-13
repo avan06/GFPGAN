@@ -78,9 +78,12 @@ class GFPGANer():
                 different_w=True,
                 narrow=1,
                 sft_half=True)
-        elif arch == 'RestoreFormer':
-            from gfpgan.archs.restoreformer_arch import RestoreFormer
-            self.gfpgan = RestoreFormer()
+        elif arch and arch.startswith("RestoreFormer"):
+            from gfpgan.archs.restoreformer_arch import VQVAEGANMultiHeadTransformer
+            head_size = 4 if arch == "RestoreFormer++" else 8
+            ex_multi_scale_num = 1 if arch == "RestoreFormer++" else 0
+            self.gfpgan = VQVAEGANMultiHeadTransformer(head_size = head_size, ex_multi_scale_num = ex_multi_scale_num)
+
         # initialize face helper
         self.face_helper = FaceRestoreHelper(
             upscale,
@@ -99,8 +102,24 @@ class GFPGANer():
             model_path = load_file_from_url(
                 url=model_path, model_dir=os.path.join(ROOT_DIR, 'gfpgan/weights'), progress=True, file_name=None)
         loadnet = torch.load(model_path, weights_only=True)
-        keyname = 'params_ema' if 'params_ema' in loadnet else 'params'
-        self.gfpgan.load_state_dict(loadnet[keyname], strict=True)
+
+        if "state_dict" in loadnet:
+            loadnet = loadnet["state_dict"]
+            new_weights = {}
+            for k, v in loadnet.items():
+                if "quantize.utility_counter" in k:
+                    continue
+                if k.startswith("vqvae."):
+                    k = k.replace("vqvae.", "")
+                new_weights[k] = v
+            loadnet = new_weights
+
+        if 'params_ema' in loadnet or 'params' in loadnet:
+            keyname = 'params_ema' if 'params_ema' in loadnet else 'params'
+            self.gfpgan.load_state_dict(loadnet[keyname], strict=True)
+        else:
+            self.gfpgan.load_state_dict(loadnet, strict=True)
+
         self.gfpgan.eval()
         self.gfpgan = self.gfpgan.to(self.device)
 

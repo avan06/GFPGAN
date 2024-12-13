@@ -84,6 +84,7 @@ def main():
         bg_upsampler = None
 
     # ------------------------ set up GFPGAN restorer ------------------------
+    extension = ".pth"
     if args.version == '1':
         arch = 'original'
         channel_multiplier = 1
@@ -109,11 +110,17 @@ def main():
         channel_multiplier = 2
         model_name = 'RestoreFormer'
         url = 'https://github.com/TencentARC/GFPGAN/releases/download/v1.3.4/RestoreFormer.pth'
+    elif args.version == 'RestoreFormer++':
+        extension = ".ckpt"
+        arch = 'RestoreFormer++'
+        channel_multiplier = 2
+        model_name = 'RestoreFormer++'
+        url = 'https://github.com/wzhouxiff/RestoreFormerPlusPlus/releases/download/v1.0.0/RestoreFormer++.ckpt'
     else:
         raise ValueError(f'Wrong model version {args.version}.')
 
     # determine model paths
-    model_path = os.path.join('experiments/pretrained_models', model_name + '.pth')
+    model_path = os.path.join('experiments/pretrained_models', f"{model_name}{extension}")
     if not os.path.isfile(model_path):
         model_path = os.path.join('gfpgan/weights', model_name + '.pth')
     if not os.path.isfile(model_path):
