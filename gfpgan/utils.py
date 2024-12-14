@@ -9,9 +9,6 @@ from basicsr.utils.download_util import load_file_from_url
 from facexlib.utils.face_restoration_helper import FaceRestoreHelper
 from torchvision.transforms.functional import normalize
 
-from gfpgan.archs.gfpgan_bilinear_arch import GFPGANBilinear
-from gfpgan.archs.gfpganv1_arch import GFPGANv1
-from gfpgan.archs.gfpganv1_clean_arch import GFPGANv1Clean
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -32,17 +29,19 @@ class GFPGANer():
         bg_upsampler (nn.Module): The upsampler for the background. Default: None.
     """
 
-    def __init__(self, model_path, upscale=2, target_width=None, target_height=None, arch='clean', channel_multiplier=2, bg_upsampler=None, device=None):
+    def __init__(self, model_path, upscale=2, target_width=None, target_height=None, arch='clean', channel_multiplier=2, bg_upsampler=None, device=None, model_rootpath="gfpgan/weights"):
         self.upscale = upscale
         self.target_width = target_width
         self.target_height = target_height
         self.bg_upsampler = bg_upsampler
+        self.model_rootpath = model_rootpath
         self.lock = threading.Lock()  # A thread lock for protecting shared resources
 
         # initialize model
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if device is None else device
         # initialize the GFP-GAN
         if arch == 'clean':
+            from gfpgan.archs.gfpganv1_clean_arch import GFPGANv1Clean
             self.gfpgan = GFPGANv1Clean(
                 out_size=512,
                 num_style_feat=512,
@@ -55,6 +54,7 @@ class GFPGANer():
                 narrow=1,
                 sft_half=True)
         elif arch == 'bilinear':
+            from gfpgan.archs.gfpgan_bilinear_arch import GFPGANBilinear
             self.gfpgan = GFPGANBilinear(
                 out_size=512,
                 num_style_feat=512,
@@ -67,6 +67,7 @@ class GFPGANer():
                 narrow=1,
                 sft_half=True)
         elif arch == 'original':
+            from gfpgan.archs.gfpganv1_arch import GFPGANv1
             self.gfpgan = GFPGANv1(
                 out_size=512,
                 num_style_feat=512,
@@ -83,6 +84,9 @@ class GFPGANer():
             head_size = 4 if arch == "RestoreFormer++" else 8
             ex_multi_scale_num = 1 if arch == "RestoreFormer++" else 0
             self.gfpgan = VQVAEGANMultiHeadTransformer(head_size = head_size, ex_multi_scale_num = ex_multi_scale_num)
+        elif arch == "CodeFormer":
+            from gfpgan.archs.codeformer_arch import CodeFormer
+            self.gfpgan= CodeFormer(dim_embd=512, codebook_size=1024, n_head=8, n_layers=9, connect_list=['32', '64', '128', '256'])
 
         # initialize face helper
         self.face_helper = FaceRestoreHelper(
@@ -95,12 +99,12 @@ class GFPGANer():
             save_ext='png',
             use_parse=True,
             device=self.device,
-            model_rootpath='gfpgan/weights')
+            model_rootpath=model_rootpath)
 
         # Load model weights
         if model_path.startswith('https://'):
             model_path = load_file_from_url(
-                url=model_path, model_dir=os.path.join(ROOT_DIR, 'gfpgan/weights'), progress=True, file_name=None)
+                url=model_path, model_dir=os.path.join(ROOT_DIR, model_rootpath), progress=True, file_name=None)
         loadnet = torch.load(model_path, weights_only=True)
 
         if "state_dict" in loadnet:
