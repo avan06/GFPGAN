@@ -94,6 +94,9 @@ class GFPGANer():
         elif arch == "CodeFormer":
             from gfpgan.archs.codeformer_arch import CodeFormer
             self.gfpgan= CodeFormer(dim_embd=512, codebook_size=1024, n_head=8, n_layers=9, connect_list=['32', '64', '128', '256'])
+        elif arch == "GPEN":
+            from gfpgan.archs.gpen_arch import FullGenerator
+            self.gfpgan = FullGenerator(size=512, style_dim=512, n_mlp=8, channel_multiplier=channel_multiplier, narrow=1)
 
         # initialize face helper
         self.face_helper = FaceRestoreHelper(
