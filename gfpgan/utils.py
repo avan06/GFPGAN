@@ -4,6 +4,7 @@ import gc
 import torch
 import threading
 import numpy as np
+from typing import Literal
 from basicsr.utils import img2tensor, tensor2img
 from basicsr.utils.download_util import load_file_from_url
 from facexlib.utils.face_restoration_helper import FaceRestoreHelper
@@ -24,12 +25,18 @@ class GFPGANer():
     Args:
         model_path (str): The path to the GFPGAN model. It can be urls (will first download it automatically).
         upscale (float): The upscale of the final output. Default: 2.
-        arch (str): The GFPGAN architecture. Option: clean | original. Default: clean.
+        arch (Literal): The GFPGAN architecture. Option: clean | bilinear | original | RestoreFormer | RestoreFormer++ | CodeFormer. Default: clean.
         channel_multiplier (int): Channel multiplier for large networks of StyleGAN2. Default: 2.
         bg_upsampler (nn.Module): The upsampler for the background. Default: None.
+        device (torch.device, optional): Device on which the models will run (CPU or GPU).
+        det_model (Literal): The face detection model to use. Possible values are:
+                             'retinaface_resnet50', 'YOLOv5l', 'YOLOv5n', 'dlib'. Default is 'retinaface_resnet50'.
     """
 
-    def __init__(self, model_path, upscale=2, target_width=None, target_height=None, arch='clean', channel_multiplier=2, bg_upsampler=None, device=None, model_rootpath="gfpgan/weights"):
+    def __init__(self, model_path, upscale=2, target_width=None, target_height=None, 
+                 arch: Literal["clean", "bilinear", "original", "RestoreFormer", "RestoreFormer++", "CodeFormer",] = "clean", 
+                 channel_multiplier=2, bg_upsampler=None, device=None, model_rootpath="gfpgan/weights",
+                 det_model: Literal["retinaface_resnet50", "YOLOv5l", "YOLOv5n", "dlib"] = "retinaface_resnet50",):
         self.upscale = upscale
         self.target_width = target_width
         self.target_height = target_height
@@ -95,7 +102,7 @@ class GFPGANer():
             target_height,
             face_size=512,
             crop_ratio=(1, 1),
-            det_model='retinaface_resnet50',
+            det_model=det_model,
             save_ext='png',
             use_parse=True,
             device=self.device,
