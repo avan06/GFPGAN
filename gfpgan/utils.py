@@ -115,7 +115,7 @@ class GFPGANer():
         if model_path.startswith('https://'):
             model_path = load_file_from_url(
                 url=model_path, model_dir=os.path.join(ROOT_DIR, model_rootpath), progress=True, file_name=None)
-        loadnet = torch.load(model_path, weights_only=True)
+        loadnet = torch.load(model_path, map_location=torch.device('cpu'), weights_only=True)
 
         if "state_dict" in loadnet:
             loadnet = loadnet["state_dict"]
