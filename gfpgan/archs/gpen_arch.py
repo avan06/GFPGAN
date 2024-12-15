@@ -141,6 +141,16 @@ class EqualLinear(nn.Module):
     def __init__(
         self, in_dim, out_dim, bias=True, bias_init=0, lr_mul=1, activation=None, device='cpu'
     ):
+        """
+        Args:
+            in_dim (int): Input dimension of the layer
+            out_dim (int): Output dimension of the layer
+            bias (bool, optional): Whether to use bias. Defaults to True.
+            bias_init (float, optional): Initial value for bias. Defaults to 0.
+            lr_mul (float, optional): Learning rate multiplier for weight and bias. Defaults to 1.
+            activation (callable, optional): Activation function to apply after linear transformation. Defaults to None.
+            device (str, optional): Device to place the layer on. Defaults to 'cpu'.
+        """
         super().__init__()
 
         self.weight = nn.Parameter(torch.randn(out_dim, in_dim).div_(lr_mul))
@@ -294,8 +304,8 @@ class NoiseInjection(nn.Module):
 
     def forward(self, image, noise=None):
         if noise is None:
-            batch, _, height, width = image.shape
-            noise = image.new_empty(batch, 1, height, width).normal_()
+            batch, channel, height, width = image.shape
+            noise = image.new_empty(batch, channel, height, width).normal_()
 
         if self.isconcat:
             return torch.cat((image, self.weight * noise), dim=1)
@@ -391,6 +401,18 @@ class Generator(nn.Module):
         narrow=1,
         device='cpu'
     ):
+        """
+        Args:
+            size (int): Target image resolution (must be power of 2)
+            style_dim (int): Dimensionality of the style vector
+            n_mlp (int): Number of MLP layers in style mapping network
+            channel_multiplier (float, optional): Multiplier for channel dimensions. Defaults to 2.
+            blur_kernel (list, optional): Kernel for anti-aliasing blur. Defaults to [1, 3, 3, 1].
+            lr_mlp (float, optional): Learning rate multiplier for MLP layers. Defaults to 0.01.
+            isconcat (bool, optional): Whether to concatenate features. Defaults to True.
+            narrow (float, optional): Narrowing factor for channel dimensions. Defaults to 1.
+            device (str, optional): Device to run the model on. Defaults to 'cpu'.
+        """
         super().__init__()
 
         self.size = size
@@ -418,7 +440,8 @@ class Generator(nn.Module):
             128: int(128 * channel_multiplier * narrow),
             256: int(64 * channel_multiplier * narrow),
             512: int(32 * channel_multiplier * narrow),
-            1024: int(16 * channel_multiplier * narrow)
+            1024: int(16 * channel_multiplier * narrow),
+            2048: int(8 * channel_multiplier * narrow)
         }
 
         self.input = ConstantInput(self.channels[4])
@@ -567,6 +590,17 @@ class ConvLayer(nn.Sequential):
         activate=True,
         device='cpu'
     ):
+        """
+        Args:
+            in_channel (int): Number of input channels
+            out_channel (int): Number of output channels
+            kernel_size (int): Size of the convolutional kernel
+            downsample (bool, optional): Whether to downsample the input. Defaults to False.
+            blur_kernel (list, optional): Kernel used for blurring during downsampling. Defaults to [1, 3, 3, 1].
+            bias (bool, optional): Whether to use bias in convolution. Defaults to True.
+            activate (bool, optional): Whether to apply activation after convolution. Defaults to True.
+            device (str, optional): Device to run the layer on. Defaults to 'cpu'.
+        """
         layers = []
 
         if downsample:
@@ -638,6 +672,18 @@ class FullGenerator(nn.Module):
         narrow=1,
         device='cpu'
     ):
+        """
+        Args:
+            size (int): Target image resolution (must be power of 2)
+            style_dim (int): Dimensionality of the style vector
+            n_mlp (int): Number of MLP layers in style mapping network
+            channel_multiplier (float, optional): Controls network width. Defaults to 2.
+            blur_kernel (list, optional): Blurring kernel for convolutions. Defaults to [1,3,3,1].
+            lr_mlp (float, optional): Learning rate for MLP network. Defaults to 0.01.
+            isconcat (bool, optional): Flag for concatenation operations. Defaults to True.
+            narrow (float, optional): Network width scaling factor. Defaults to 1.
+            device (str, optional): Computation device. Defaults to 'cpu'.
+        """
         super().__init__()
         channels = {
             4: int(512 * narrow),
@@ -648,7 +694,8 @@ class FullGenerator(nn.Module):
             128: int(128 * channel_multiplier * narrow),
             256: int(64 * channel_multiplier * narrow),
             512: int(32 * channel_multiplier * narrow),
-            1024: int(16 * channel_multiplier * narrow)
+            1024: int(16 * channel_multiplier * narrow),
+            2048: int(8 * channel_multiplier * narrow)
         }
 
         self.log_size = int(math.log(size, 2))
@@ -690,6 +737,14 @@ class FullGenerator(nn.Module):
 
 class Discriminator(nn.Module):
     def __init__(self, size, channel_multiplier=2, blur_kernel=[1, 3, 3, 1], narrow=1, device='cpu'):
+        """
+        Args:
+            size (int): Target image resolution (must be power of 2)
+            channel_multiplier (int, optional): Multiplier for channel dimensions. Defaults to 2.
+            blur_kernel (list, optional): Kernel for blurring convolution. Defaults to [1, 3, 3, 1].
+            narrow (float, optional): Scaling factor for channel width. Defaults to 1.
+            device (str, optional): Computation device. Defaults to 'cpu'.
+        """
         super().__init__()
 
         channels = {
@@ -701,7 +756,8 @@ class Discriminator(nn.Module):
             128: int(128 * channel_multiplier * narrow),
             256: int(64 * channel_multiplier * narrow),
             512: int(32 * channel_multiplier * narrow),
-            1024: int(16 * channel_multiplier * narrow)
+            1024: int(16 * channel_multiplier * narrow),
+            2048: int(8 * channel_multiplier * narrow)
         }
 
         convs = [ConvLayer(3, channels[size], 1, device=device)]
@@ -732,7 +788,7 @@ class Discriminator(nn.Module):
         out = self.convs(input)
 
         batch, channel, height, width = out.shape
-        group = min(batch, self.stddev_group)
+        group = batch
         stddev = out.view(
             group, -1, self.stddev_feat, channel // self.stddev_feat, height, width
         )
@@ -746,3 +802,71 @@ class Discriminator(nn.Module):
         out = out.view(batch, -1)
         out = self.final_linear(out)
         return out
+
+class FullGenerator_SR(nn.Module):
+    def __init__(
+        self,
+        in_size,
+        out_size,
+        style_dim,
+        n_mlp,
+        channel_multiplier=2,
+        blur_kernel=[1, 3, 3, 1],
+        lr_mlp=0.01,
+        isconcat=True,
+        narrow=1,
+        device='cpu'
+    ):
+        super().__init__()
+        channels = {
+            4: int(512 * narrow),
+            8: int(512 * narrow),
+            16: int(512 * narrow),
+            32: int(512 * narrow),
+            64: int(256 * channel_multiplier * narrow),
+            128: int(128 * channel_multiplier * narrow),
+            256: int(64 * channel_multiplier * narrow),
+            512: int(32 * channel_multiplier * narrow),
+            1024: int(16 * channel_multiplier * narrow),
+            2048: int(8 * channel_multiplier * narrow),
+        }
+
+        self.log_insize = int(math.log(in_size, 2))
+        self.log_outsize = int(math.log(out_size, 2))
+        self.generator = Generator(out_size, style_dim, n_mlp, channel_multiplier=channel_multiplier, blur_kernel=blur_kernel, lr_mlp=lr_mlp, isconcat=isconcat, narrow=narrow, device=device)
+
+        conv = [ConvLayer(3, channels[in_size], 1, device=device)]
+        self.ecd0 = nn.Sequential(*conv)
+        in_channel = channels[in_size]
+
+        self.names = ['ecd%d'%i for i in range(self.log_insize-1)]
+        for i in range(self.log_insize, 2, -1):
+            out_channel = channels[2 ** (i - 1)]
+            #conv = [ResBlock(in_channel, out_channel, blur_kernel)]
+            conv = [ConvLayer(in_channel, out_channel, 3, downsample=True, device=device)]
+            setattr(self, self.names[self.log_insize-i+1], nn.Sequential(*conv))
+            in_channel = out_channel
+        self.final_linear = nn.Sequential(EqualLinear(channels[4] * 4 * 4, style_dim, activation='fused_lrelu', device=device))
+
+    def forward(self,
+        inputs,
+        return_latents=False,
+        inject_index=None,
+        truncation=1,
+        truncation_latent=None,
+        input_is_latent=False,
+    ):
+        noise = []
+        for i in range(self.log_outsize-self.log_insize):
+            noise.append(None)
+        for i in range(self.log_insize-1):
+            ecd = getattr(self, self.names[i])
+            inputs = ecd(inputs)
+            noise.append(inputs)
+            #print(inputs.shape)
+        inputs = inputs.view(inputs.shape[0], -1)
+        outs = self.final_linear(inputs)
+        #print(outs.shape)
+        noise = list(itertools.chain.from_iterable(itertools.repeat(x, 2) for x in noise))[::-1]
+        image, latent = self.generator([outs], return_latents, inject_index, truncation, truncation_latent, input_is_latent, noise=noise[1:])
+        return image, latent

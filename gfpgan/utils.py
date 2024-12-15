@@ -25,28 +25,31 @@ class GFPGANer():
     Args:
         model_path (str): The path to the GFPGAN model. It can be urls (will first download it automatically).
         upscale (float): The upscale of the final output. Default: 2.
-        arch (Literal): The GFPGAN architecture. Option: clean | bilinear | original | RestoreFormer | RestoreFormer++ | CodeFormer. Default: clean.
+        arch (Literal): The GFPGAN architecture. Option: clean | bilinear | original | RestoreFormer | RestoreFormer++ | 
+                        CodeFormer | GPEN | GPEN-1024 | GPEN-2048. Default: clean.
         channel_multiplier (int): Channel multiplier for large networks of StyleGAN2. Default: 2.
         bg_upsampler (nn.Module): The upsampler for the background. Default: None.
         device (torch.device, optional): Device on which the models will run (CPU or GPU).
         det_model (Literal): The face detection model to use. Possible values are:
                              'retinaface_resnet50', 'YOLOv5l', 'YOLOv5n', 'dlib'. Default is 'retinaface_resnet50'.
+        resolution (int): Used to specify the size of the Face Restoration model. 
+                          Currently, only GPEN supports sizes of 1024 and 2048. The default is 512.
     """
 
     def __init__(self, model_path, upscale=2, target_width=None, target_height=None, 
-                 arch: Literal["clean", "bilinear", "original", "RestoreFormer", "RestoreFormer++", "CodeFormer",] = "clean", 
+                 arch: Literal["clean", "bilinear", "original", "RestoreFormer", "RestoreFormer++", "CodeFormer", "GPEN", "GPEN-1024", "GPEN-2048", ] = "clean", 
                  channel_multiplier=2, bg_upsampler=None, device=None, model_rootpath="gfpgan/weights",
-                 det_model: Literal["retinaface_resnet50", "YOLOv5l", "YOLOv5n", "dlib"] = "retinaface_resnet50",):
+                 det_model: Literal["retinaface_resnet50", "YOLOv5l", "YOLOv5n", "dlib"] = "retinaface_resnet50", resolution = 512):
         self.upscale = upscale
         self.target_width = target_width
         self.target_height = target_height
         self.bg_upsampler = bg_upsampler
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if device is None else device
         self.model_rootpath = model_rootpath
+        self.resolution = resolution
         self.lock = threading.Lock()  # A thread lock for protecting shared resources
 
-        # initialize model
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if device is None else device
-        # initialize the GFP-GAN
+        # initialize the model
         if arch == 'clean':
             from gfpgan.archs.gfpganv1_clean_arch import GFPGANv1Clean
             self.gfpgan = GFPGANv1Clean(
@@ -90,13 +93,13 @@ class GFPGANer():
             from gfpgan.archs.restoreformer_arch import VQVAEGANMultiHeadTransformer
             head_size = 4 if arch == "RestoreFormer++" else 8
             ex_multi_scale_num = 1 if arch == "RestoreFormer++" else 0
-            self.gfpgan = VQVAEGANMultiHeadTransformer(head_size = head_size, ex_multi_scale_num = ex_multi_scale_num)
+            self.gfpgan = VQVAEGANMultiHeadTransformer(head_size = head_size, ex_multi_scale_num = ex_multi_scale_num, resolution = self.resolution)
         elif arch == "CodeFormer":
             from gfpgan.archs.codeformer_arch import CodeFormer
             self.gfpgan= CodeFormer(dim_embd=512, codebook_size=1024, n_head=8, n_layers=9, connect_list=['32', '64', '128', '256'])
-        elif arch == "GPEN":
+        elif arch and arch.startswith("GPEN"):
             from gfpgan.archs.gpen_arch import FullGenerator
-            self.gfpgan = FullGenerator(size=512, style_dim=512, n_mlp=8, channel_multiplier=channel_multiplier, narrow=1)
+            self.gfpgan = FullGenerator(size=self.resolution, style_dim=512, n_mlp=8, channel_multiplier=channel_multiplier, narrow=1)
 
         # initialize face helper
         self.face_helper = FaceRestoreHelper(
@@ -173,7 +176,9 @@ class GFPGANer():
                     self.face_helper.align_warp_face()
             
                 # face restoration
-                for cropped_face in self.face_helper.cropped_faces:
+                for idx, cropped_face in enumerate(self.face_helper.cropped_faces): 
+                    if self.resolution != 512:
+                        self.face_helper.cropped_faces[idx] = cropped_face = cv2.resize(cropped_face, (self.resolution, self.resolution))
                     # prepare data
                     cropped_face_t = img2tensor(cropped_face / 255., bgr2rgb=True, float32=True)
                     normalize(cropped_face_t, (0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True)
