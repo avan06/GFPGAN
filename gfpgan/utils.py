@@ -32,8 +32,9 @@ class GFPGANer():
         device (torch.device, optional): Device on which the models will run (CPU or GPU).
         det_model (Literal): The face detection model to use. Possible values are:
                              'retinaface_resnet50', 'YOLOv5l', 'YOLOv5n', 'dlib'. Default is 'retinaface_resnet50'.
-        resolution (int): Used to specify the size of the Face Restoration model. 
-                          Currently, only GPEN supports sizes of 1024 and 2048. The default is 512.
+        resolution (int): Specifies the input size based on the Face Restoration model.
+                          Currently, only GPEN supports sizes of 1024 and 2048.
+                          This value is set to the face_size parameter in FaceRestoreHelper. Default: 512.
     """
 
     def __init__(self, model_path, upscale=2, target_width=None, target_height=None, 
@@ -106,7 +107,7 @@ class GFPGANer():
             upscale,
             target_width,
             target_height,
-            face_size=512,
+            face_size=self.resolution,
             crop_ratio=(1, 1),
             det_model=det_model,
             save_ext='png',
@@ -176,9 +177,7 @@ class GFPGANer():
                     self.face_helper.align_warp_face()
             
                 # face restoration
-                for idx, cropped_face in enumerate(self.face_helper.cropped_faces): 
-                    if self.resolution != 512:
-                        self.face_helper.cropped_faces[idx] = cropped_face = cv2.resize(cropped_face, (self.resolution, self.resolution))
+                for cropped_face in self.face_helper.cropped_faces:
                     # prepare data
                     cropped_face_t = img2tensor(cropped_face / 255., bgr2rgb=True, float32=True)
                     normalize(cropped_face_t, (0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True)
