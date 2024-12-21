@@ -140,7 +140,19 @@ class TransformerSALayer(nn.Module):
         return tgt
 
 class Fuse_sft_block(nn.Module):
+    """
+    A PyTorch module implementing a feature fusion block with scale and shift transformations.
+    This block combines encoded and decoded features through a custom mechanism
+    to generate enhanced feature maps for downstream tasks.
+    """
     def __init__(self, in_ch, out_ch):
+        """
+        Initializes the Fuse_sft_block module.
+        
+        Args:
+            in_ch (int): The number of input channels for both the encoded and decoded features.
+            out_ch (int): The number of output channels for the block.
+        """
         super().__init__()
         self.encode_enc = ResBlock(2*in_ch, out_ch)
 
@@ -154,11 +166,23 @@ class Fuse_sft_block(nn.Module):
                     nn.LeakyReLU(0.2, True),
                     nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=1))
 
-    def forward(self, enc_feat, dec_feat, w=1):
+    def forward(self, enc_feat, dec_feat, weight=1):
+        """
+        Forward pass for the Fuse_sft_block module.
+        
+        Args:
+            enc_feat (torch.Tensor): The feature map from the encoder branch.
+            dec_feat (torch.Tensor): The feature map from the decoder branch.
+            weight (float): Weight parameter for residual scaling. Default is 1. A value of 1 maintains the original strength of the residual, 
+                            while smaller values reduce its influence, leading to less aggressive updates to the output feature map.
+        
+        Returns:
+            torch.Tensor: The enhanced feature map after fusion.
+        """
         enc_feat = self.encode_enc(torch.cat([enc_feat, dec_feat], dim=1))
         scale = self.scale(enc_feat)
         shift = self.shift(enc_feat)
-        residual = w * (dec_feat * scale + shift)
+        residual = weight * (dec_feat * scale + shift)
         out = dec_feat + residual
         return out
 
@@ -237,13 +261,13 @@ class CodeFormer(VQAutoEncoder):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
 
-    def forward(self, x, w=0, detach_16=True, code_only=False, adain=False, **kwargs):
+    def forward(self, x, weight=0, detach_16=True, code_only=False, adain=False, **kwargs):
         """
         The forward pass of the CodeFormer model.
         
         Args:
             x (Tensor): The input tensor with shape (B, C, H, W).
-            w (float): Weight parameter for feature fusion. Default is 0.
+            weight (float): Weight parameter for feature fusion. Default is 0.
             detach_16 (bool): If True, detaches gradients for 16x16 features during Stage III training.
             code_only (bool): If True, only processes the quantized codes without decoding.
             adain (bool): If True, applies adaptive instance normalization to quantized features.
@@ -309,8 +333,8 @@ class CodeFormer(VQAutoEncoder):
             x = block(x) 
             if i in fuse_list: # fuse after i-th block
                 f_size = str(x.shape[-1])
-                if w>0:
-                    x = self.fuse_convs_dict[f_size](enc_feat_dict[f_size].detach(), x, w)
+                if weight>0:
+                    x = self.fuse_convs_dict[f_size](enc_feat_dict[f_size].detach(), x, weight)
         out = x
         # logits doesn't need softmax before cross_entropy loss
         return out, logits, lq_feat
