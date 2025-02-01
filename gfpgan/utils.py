@@ -142,7 +142,7 @@ class GFPGANer():
         self.gfpgan = self.gfpgan.to(self.device)
 
     @torch.no_grad()
-    def enhance(self, img, has_aligned=False, only_center_face=False, paste_back=True, weight=0.5, bg_upsample_img: np.ndarray=None):
+    def enhance(self, img, has_aligned=False, only_center_face=False, paste_back=True, weight=0.5, bg_upsample_img: np.ndarray=None, eye_dist_threshold:any = 10):
         """
         Enhance facial features in the input image using face alignment, restoration, and optional background upsampling.
 
@@ -153,6 +153,7 @@ class GFPGANer():
             paste_back (bool, optional): If True, the restored faces will be pasted back onto the original image or a background upsampled image. Defaults to True.
             weight (float, optional): The blending weight for the face restoration model. Defaults to 0.5.
             bg_upsample_img (np.ndarray, optional): An already upsampled background image to paste the restored faces onto. If None, background upsampling will be performed if supported. Defaults to None.
+            eye_dist_threshold (any, optional): A threshold to filter out faces with too small an eye distance (e.g., side faces). Default is 10.
 
         Returns:
             tuple: 
@@ -170,8 +171,8 @@ class GFPGANer():
                 else:
                     self.face_helper.read_image(img)
                     # get face landmarks for each face
-                    self.face_helper.get_face_landmarks_5(only_center_face=only_center_face, eye_dist_threshold=5)
-                    # eye_dist_threshold=5: skip faces whose eye distance is smaller than 5 pixels
+                    self.face_helper.get_face_landmarks_5(only_center_face=only_center_face, eye_dist_threshold=eye_dist_threshold)
+                    # eye_dist_threshold=10: skip faces whose eye distance is smaller than 10 pixels
                     # TODO: even with eye_dist_threshold, it will still introduce wrong detections and restorations.
                     # align and warp each face
                     self.face_helper.align_warp_face()
